@@ -863,6 +863,106 @@ def _(mo, moves, n, series, simulate, start_line, tiles, viz):
 
 
 @app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## The same idea, in symbols
+
+    Write the current line as a function $\sigma$: give it a position, and it returns the
+    name standing there.
+
+    - A **position move** rearranges which position each spot reads from. If it sends
+      position $i$ to read old position $\pi(i)$, the new line is $\sigma \circ \pi$.
+      It attaches on the **right**, the input side, where positions go in.
+    - A **name move** relabels whatever name comes out. If it renames $x$ to $\lambda(x)$,
+      the new line is $\lambda \circ \sigma$. It attaches on the **left**, the output side,
+      where names come out.
+
+    So with both, a position goes through $\pi$, then $\sigma$, then $\lambda$. That's written
+    $\lambda \circ \sigma \circ \pi$, because composition reads right to left.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    sym_pos = mo.ui.dropdown(["x0/2", "x1/4", "s1", "s2"], value="x0/2", label="position move π")
+    sym_name = mo.ui.dropdown(["pb/d", "pa/e", "pc/e"], value="pb/d", label="name move λ")
+    return sym_name, sym_pos
+
+
+@app.cell(hide_code=True)
+def _(L, P, compose, mo, series, simulate, sym_name, sym_pos, tiles, viz):
+    _sigma = "baecd"
+    _m, _l = sym_pos.value, sym_name.value
+    if _m[0] == "s":
+        _pi = [(i - int(_m[1:])) % 5 for i in range(5)]
+    else:
+        _a, _b = map(int, _m[1:].split("/"))
+        _pi = list(range(5))
+        _pi[_a], _pi[_b] = _b, _a
+    _lam = lambda ch: _l[3] if ch == _l[1] else _l[1] if ch == _l[3] else ch
+
+    _X, _Y = [60, 230, 400, 570], lambda j: 60 + 40 * j
+    _svg = [
+        f'<text class="t2" x="{x}" y="18" text-anchor="middle" font-size="11">{t}</text>'
+        for x, t in zip(_X, ["position i", "reads position π(i)", "name there, σ(π(i))", "relabeled, λ(σ(π(i)))"])
+    ]
+    for _x0, _x1, _t, _c in [(_X[0], _X[1], "π", series(0)), (_X[1], _X[2], "σ", "var(--t2)"), (_X[2], _X[3], "λ", series(1))]:
+        _svg.append(f'<text x="{(_x0 + _x1) / 2}" y="40" text-anchor="middle" font-size="14" font-weight="700" fill="{_c}">{_t}</text>')
+    for _i in range(5):
+        _svg.append(f'<line x1="{_X[0] + 14}" y1="{_Y(_i)}" x2="{_X[1] - 14}" y2="{_Y(_pi[_i])}" stroke="var(--s0)" stroke-width="2"/>')
+        _svg.append(f'<line x1="{_X[1] + 14}" y1="{_Y(_i)}" x2="{_X[2] - 14}" y2="{_Y(_i)}" stroke="var(--t2)" stroke-width="1.5" stroke-dasharray="3 3"/>')
+        _changed = _lam(_sigma[_i]) != _sigma[_i]
+        _svg.append(
+            f'<line x1="{_X[2] + 14}" y1="{_Y(_i)}" x2="{_X[3] - 14}" y2="{_Y(_i)}" stroke="var(--s1)" stroke-width="{2.5 if _changed else 1}" opacity="{1 if _changed else 0.4}"/>'
+        )
+    for _col, _labels in enumerate([range(5), range(5), list(_sigma), [_lam(ch) for ch in _sigma]]):
+        for _j, _lab in enumerate(_labels):
+            _svg.append(
+                f'<circle cx="{_X[_col]}" cy="{_Y(_j)}" r="13" fill="var(--surface)" stroke="var(--t2)"/>'
+                f'<text x="{_X[_col]}" y="{_Y(_j) + 4}" text-anchor="middle" font-size="12" font-weight="600">{_lab}</text>'
+            )
+
+    _result = "".join(_lam(_sigma[_pi[_i]]) for _i in range(5))
+    _pos_first = simulate(simulate(_sigma, [_m]), [_l])
+    _name_first = simulate(simulate(_sigma, [_l]), [_m])
+    _PL, _LP = compose(P, L), compose(L, P)
+    mo.vstack(
+        [
+            mo.md(
+                r"""
+                ## Positions on the right, names on the left
+
+                Pick a position move and a name move, and follow each position from left to right.
+                """
+            ),
+            mo.hstack([sym_pos, sym_name], justify="start", gap=2),
+            viz(
+                f"""<svg viewBox="0 0 640 {_Y(4) + 24}" style="width:100%;max-width:640px">{"".join(_svg)}</svg>
+                <div class="grid" style="grid-template-columns:auto auto auto;gap:6px 12px;margin-top:4px">
+                <div class="lbl">read off the diagram</div>{tiles(_result, 5)}<div></div>
+                <div class="lbl">position move, then name move</div>{tiles(_pos_first, 5)}<div>{"✓" if _pos_first == _result else "✗"}</div>
+                <div class="lbl">name move, then position move</div>{tiles(_name_first, 5)}<div>{"✓" if _name_first == _result else "✗"}</div>
+                </div>"""
+            ),
+            mo.md(
+                rf"""
+                $\pi$ only touches the start of each path and $\lambda$ only the end, so it doesn't matter
+                which is added first: $\lambda \circ (\sigma \circ \pi) = (\lambda \circ \sigma) \circ \pi$.
+                Every dance adds P on the right and L on the left, so after $k$ dances the line is
+                $L^k \circ \sigma \circ P^k$.
+
+                What commutes is *acting on the right* with *acting on the left*. P and L composed
+                directly with each other generally don't commute: for this dance,
+                $P \circ L {"=" if _PL == _LP else r"\neq"} L \circ P$.
+                """
+            ),
+        ]
+    )
+    return
+
+
+@app.cell(hide_code=True)
 def _(
     L,
     P,
